@@ -52,7 +52,7 @@ No repository, no configuration. You get a plain Ubuntu container with Node, Pyt
 ## 1.2 Get the lab repo
 
 ```bash
-git clone https://github.com/andras-simonyi/pi-rag-eval.git
+git clone https://github.com/YOUR-INSTRUCTOR/pi-rag-eval.git
 cd pi-rag-eval
 ```
 
@@ -616,6 +616,96 @@ direct tool                  4,440             4,400
 ```
 
 Cached is cheaper. It is not free, and it is not smaller.
+
+### What proxy mode actually puts in the context
+
+Worth being precise about, because "one tool instead of hundreds" is a slogan and the
+reality is more interesting.
+
+**At session start** the context holds exactly one tool definition: `mcp`, with its action
+verbs (search, describe, call, plus status and auth) and its input schema. Roughly 200
+tokens. None of your servers' tool names, descriptions or schemas are there.
+
+**The metadata still exists**, cached on disk, so search and describe work before the
+adapter has ever connected. Servers are lazy — they start on the first real call.
+
+**The model gets what it needs by asking.** It calls `mcp({search: "corpus"})` and the
+matching tool names and schemas come back *as a tool result*.
+
+That last step is the catch. **A tool result is a message in the conversation, and it
+stays there.** Once the agent has searched and pulled down `search_corpus`'s schema, you
+pay for that schema on every subsequent request — exactly as if it had been direct, plus
+the round trip you spent discovering it.
+
+So proxy does not make tool metadata free. It makes it *lazy and scoped*:
+
+| | Pays for | When |
+|---|---|---|
+| direct | every tool, always | up front, every request |
+| proxy | only tools actually touched | from first use onward, plus a discovery round trip |
+
+Proxy wins when you have twenty tools and use two. The advantage shrinks toward zero in a
+session that touches everything. For this lab — one server, one tool, used constantly —
+proxy is arguably the wrong choice, and saying so is a better answer than repeating the
+README.
+
+Execution is identical either way; only discovery differs.
+
+### How does the proxy find a tool?
+
+You have spent this lab evaluating retrieval. The proxy's `search` action is a retrieval
+system too, sitting inside your agent's inner loop. It is worth a minute.
+
+It is **purely lexical**. Space-separated query words are ranked by weighted matches
+across the tool name, the server name, the description, and any configured
+`searchKeywords`, paginated at 12 results by default. Some versions simply OR the words
+with no ranking. Tool names are fuzzy-matched on hyphens and underscores, so
+`context7_resolve_library_id` finds `context7_resolve-library-id` — separator
+normalisation, not edit distance, not stemming. A regex mode exists, unranked.
+
+No embeddings. No reranking. Nothing you built in the RAG lab.
+
+**And that is probably the right call.** The corpus is a few dozen very short documents.
+The "text" is identifiers and one-line descriptions, not prose. The lookup sits in the
+agent's loop, so latency has to be near zero. Requiring an embedding model to install a
+tool adapter would be ridiculous. Your reranker earns its keep on paragraphs of Hungarian
+technical documentation; it would be absurd here.
+
+**But it fails exactly where your own table says keyword retrieval fails.** A query whose
+words do not overlap the tool's name or description returns nothing. Try it:
+
+```
+Search your MCP tools for "hungarian bakery equipment lookup". Then search for
+"corpus". Show me both result sets and explain the difference.
+```
+
+The second finds `search_corpus`. The first probably does not, even though it describes
+what the tool does far better. That is your `keyword_plain` row, reproduced inside the
+agent's own plumbing.
+
+The fix is not a vector index. It is `searchKeywords` in the server config — hand-written
+synonyms attached to a tool so lexical search can reach it. Check the adapter's README for
+the exact placement, since the config schema varies between versions. Adding a couple of
+Hungarian terms and re-running the failing query is a five-minute experiment with a very
+clear result.
+
+Worth stating plainly in your report if you have room: two retrieval systems in one
+session, one tuned with an evaluation harness and one deliberately left as keyword
+matching, each appropriate to its corpus.
+
+### Find out for yourself
+
+Ask the agent what it can see. In a **fresh** session, before it has called anything:
+
+```
+Without calling any tools, tell me exactly what you know about the MCP servers and
+tools available to you. Names, descriptions, schemas — quote what is in front of you,
+and say clearly what you do not know.
+```
+
+Then let it run a search and ask again. The difference between those two answers is the
+proxy architecture, demonstrated rather than described — and it works whatever version of
+the adapter you have.
 
 ### Inspecting the context directly
 
