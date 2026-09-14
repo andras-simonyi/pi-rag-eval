@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "corpus": {
+      "url": "https://xxxxxxxxxxxx.gradio.live/gradio_api/mcp/"
+    }
+  }
+}

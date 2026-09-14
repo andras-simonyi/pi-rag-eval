@@ -1,0 +1,14 @@
+.env
+data/*.jsonl
+data/*.zip
+eval/chunks/
+eval/*.jsonl
+eval/*.csv
+eval/*.md
+!eval/.gitkeep
+REPORT.md
+TODO.md
+__pycache__/
+*.pyc
+.pi/
+.mcp.json
