@@ -63,8 +63,21 @@ cd pi-rag-eval
 ```
 
 It checks Node (the MCP adapter needs 22.19 or later and will pull a newer Node through
-nvm if yours is older), installs Pi, installs the MCP adapter, and installs the Python
-dependencies. Re-runnable if a step fails.
+nvm if yours is older), installs Pi from `@earendil-works/pi-coding-agent`, installs the
+MCP adapter, and installs the Python dependencies. Re-runnable if a step fails.
+
+> **One package name matters here.** Pi is published as
+> `@earendil-works/pi-coding-agent`. An older `@mariozechner/pi-coding-agent` exists,
+> is deprecated, and is frozen below the version the MCP adapter needs. The adapter
+> declares the official package as a peer dependency, so installing the wrong one
+> produces this at startup:
+>
+> ```
+> Failed to load extension: Cannot find module '@earendil-works/pi-coding-agent'
+> ```
+>
+> `setup.sh` removes the deprecated packages before installing, so a clean run avoids
+> this. If you hit it anyway, see Troubleshooting.
 
 Open it first if you want to see what it does — it is forty lines and no magic:
 
@@ -72,13 +85,17 @@ Open it first if you want to see what it does — it is forty lines and no magic
 cat setup.sh
 ```
 
-Then confirm:
+Then confirm all three things:
 
 ```bash
-pi --version
+pi --version                                    # 0.84.0 or later
+npm ls -g --depth=0 | grep pi-coding-agent      # exactly one line, @earendil-works
 ```
 
-Nothing? `source ~/.bashrc` or open a new terminal.
+Start Pi and check the adapter loaded — `/mcp` should open a panel, not report an
+unknown command.
+
+Nothing on PATH? `source ~/.bashrc` or open a new terminal.
 
 ## 1.4 Model credentials
 
@@ -666,6 +683,7 @@ why you now know how each one works rather than which button turns it on.
 |---|---|
 | `pi: command not found` | `source ~/.bashrc`, or re-run `./setup.sh` |
 | `setup.sh` fails on Node | The adapter needs Node 22.19+. `nvm install 22 && nvm use 22`, then re-run |
+| `Cannot find module '@earendil-works/pi-coding-agent'` at startup | Wrong Pi package installed. See below the table |
 | `pi install` of the adapter fails | Check `pi --version` is 0.84.0 or later, then retry |
 | `/mcp` is not a command | The adapter did not install. `pi install npm:pi-mcp-adapter`, then restart Pi |
 | `/mcp` shows corpus disconnected | URL rotated. `python tools/write_mcp_config.py`, then reconnect in the panel |
@@ -678,6 +696,36 @@ why you now know how each one works rather than which button turns it on.
 | Rate limit errors | Ask the agent to use 2 concurrent subagents instead of 4 |
 | Sweep crawling | `--concurrency 2`, or re-sample with `--n 10` and regenerate |
 | Lost everything on reconnect | A blank Codespace has no repo behind it. Part 11 — publish before you stop |
+
+## The adapter cannot find Pi
+
+```
+Failed to load extension ".../pi-mcp-adapter/index.ts":
+Cannot find module '@earendil-works/pi-coding-agent'
+```
+
+The adapter names the official Pi package as a peer dependency and looks for it beside
+itself in global `node_modules`. This error means what is installed there is a different
+package — most often the deprecated `@mariozechner/pi-coding-agent`, or the community
+fork `@oh-my-pi/pi-coding-agent`.
+
+```bash
+npm ls -g --depth=0 | grep pi-coding-agent
+```
+
+Anything other than a single `@earendil-works` line is the problem:
+
+```bash
+npm uninstall -g @mariozechner/pi-coding-agent @oh-my-pi/pi-coding-agent
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+hash -r
+pi --version
+```
+
+Note that the deprecated package is also frozen well below 0.84.0, so switching fixes the
+version requirement at the same time. `pi install` writes to your Pi agent directory
+rather than to `node_modules`, so the adapter itself stays registered — you do not need
+to reinstall it.
 | Agent stuck in a retry loop | `Esc` to interrupt. Tell it to record progress in `TODO.md` and stop |
 | Your new skill never fires | The `description` frontmatter, not the body. Rewrite it as situations and phrasings |
 | Skill fires but is ignored | `SKILL.md` is probably too long or too vague. Move detail to `reference/` |
@@ -701,6 +749,7 @@ Open a **new, empty** Colab notebook — not your RAG one — and run these as c
 !git clone -q https://github.com/YOUR-INSTRUCTOR/pi-rag-eval.git /content/pi-rag-eval
 %cd /content/pi-rag-eval
 !bash setup.sh
+!npm ls -g --depth=0 | grep pi-coding-agent   # exactly one line, @earendil-works
 ```
 
 ```python
@@ -745,6 +794,7 @@ Verify these against your installed version; Pi moves quickly.
 | `/tree` | Show the session tree |
 | `/skill:name` | Load a skill explicitly instead of waiting for it to trigger |
 | `pi install npm:<pkg>` | Install a Pi package. Packages run arbitrary code — read before installing |
+| `npm ls -g --depth=0` | Check exactly one `pi-coding-agent` is installed, under `@earendil-works` |
 | `/mcp` | MCP adapter panel: servers, status, tools, direct/proxy toggles |
 | `/mcp setup` | Guided config: detect existing MCP files, scaffold `.mcp.json`, preview diffs |
 | `/skill:mcp-scripting` | The adapter's scripting workflow, for multi-call MCP work |

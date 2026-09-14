@@ -25,9 +25,16 @@ cd pi-rag-eval
 ./setup.sh
 ```
 
-`setup.sh` checks Node, installs Pi, installs `pi-mcp-adapter`, and installs the
-Python dependencies. A blank Codespace has no repository behind it, so nothing is
-backed up — push your work before you finish.
+`setup.sh` checks Node, installs Pi from `@earendil-works/pi-coding-agent`,
+installs `pi-mcp-adapter`, and installs the Python dependencies. A blank Codespace
+has no repository behind it, so nothing is backed up — push your work before you
+finish.
+
+Pi's official npm package is `@earendil-works/pi-coding-agent`. The older
+`@mariozechner/pi-coding-agent` is deprecated and frozen below the version the MCP
+adapter requires; the adapter names the official package as a peer dependency, so
+installing the wrong one fails at startup with `Cannot find module
+'@earendil-works/pi-coding-agent'`. `setup.sh` removes the deprecated packages first.
 
 **2. Start the corpus endpoint.** Run the RAG lab notebook in Colab through the
 launch cell. Copy the public URL it prints — the app URL, not the MCP one:
