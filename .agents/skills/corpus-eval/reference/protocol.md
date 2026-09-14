@@ -27,6 +27,22 @@ a bare table of contents, a contact block. Write a `skip` record instead:
 {"slot":"07","status":"skip","reason":"navigation boilerplate, no factual content"}
 ```
 
+## Concurrent writes
+
+Subagents write to `eval/questions/chunk_<slot>.jsonl`, one file each, and
+`tools/merge_questions.py` combines them afterwards.
+
+This is not tidiness. A subagent with `--tools read,write` has no shell, so it
+cannot do an atomic `>>` append; Pi's write tool replaces the whole file. Point
+four concurrent subagents at one file and you get lost updates — records written
+and then overwritten, with no error anywhere. Disjoint files eliminate the race
+instead of narrowing it.
+
+Contrast `tools/run_sweep.py`, which does append concurrently to a single file.
+That is safe for a different reason: its workers are threads inside one process
+sharing one file handle and one `threading.Lock`. Separate processes cannot
+share a lock, which is why phase 1 needs a different design from phase 2.
+
 ## Language pairs
 
 The corpus is Hungarian. For each chunk generate **two** questions:
@@ -44,6 +60,21 @@ collapse on `lang=en` while dense and hybrid hold up. If that pattern does not
 appear, something is wrong with the setup — check that the dense vectors were
 built from `embedding_text` and that the reranker model is the multilingual
 one.
+
+## How many calls this adds up to
+
+There is no fixed total. It is:
+
+    2 languages x (sampled chunks that survived) x 10 configurations
+
+Twenty chunks with nothing skipped gives 400 calls. Ten survivors gives 200. Both are
+correct outcomes — skipping a boilerplate chunk is the protocol working, not a failure.
+Report the number you actually got, with the skip count and reasons, in the report's
+setup section.
+
+What is *not* acceptable is a single language. If only Hungarian questions were
+generated, the cross-lingual comparison disappears, and that is the most informative
+part of this evaluation. Regenerate.
 
 ## The configuration grid
 
@@ -87,9 +118,8 @@ defined; it is a separate question from which `top_k` to ship.
    configs degrade on English queries.
 6. **Alpha sensitivity** — is hybrid flat across 0.25/0.50/0.75, or is there a
    real optimum? Flat means the parameter is not worth exposing to users.
-7. **Limitations** — sample size, single seed, URL-vs-chunk_id matching if the
-   notebook patch was not applied, and the fact that retrieval quality is not
-   answer quality.
+7. **Limitations** — sample size, single seed, and the fact that retrieval
+   quality is not answer quality.
 8. **What to change in the notebook** — the specific widget defaults in the
    Gradio Blocks section.
 

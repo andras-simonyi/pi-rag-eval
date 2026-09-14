@@ -17,6 +17,7 @@ import argparse
 import csv
 import json
 import statistics
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -31,20 +32,14 @@ def load(path: Path) -> list[dict]:
 def gold_rank(record: dict) -> int | None:
     """1-based rank of the gold chunk, or None if it was not retrieved.
 
-    Matches on chunk_id when available, otherwise falls back to URL. The URL
-    fallback is weaker: several chunks can share one source page, so a URL hit
-    is not proof the right passage was found. Apply the notebook patch in
-    reference/notebook-patch.md to get chunk_id and remove the ambiguity.
+    Matches on chunk_id. Deliberately no URL fallback: several chunks can share
+    one source page, so a URL hit is not proof the right passage was found and
+    would inflate every score.
     """
     gold_id = record.get("gold_chunk_id")
     retrieved = record.get("retrieved") or []
     if gold_id and gold_id in retrieved:
         return retrieved.index(gold_id) + 1
-
-    gold_url = record.get("gold_url")
-    urls = record.get("retrieved_urls") or []
-    if gold_url and gold_url in urls:
-        return urls.index(gold_url) + 1
     return None
 
 
@@ -110,6 +105,22 @@ def main() -> None:
 
     records = load(Path(args.results))
 
+    # Every score is computed by matching gold_chunk_id against the retrieved
+    # ids. With no ids present, the whole table reads 0.0 and looks like a
+    # catastrophic retrieval result rather than a broken endpoint. Abort before
+    # printing anything misleading.
+    if not any(
+        identifier
+        for record in records
+        for identifier in (record.get("retrieved") or [])
+    ):
+        sys.exit(
+            "No chunk ids in eval/results.jsonl — the retrieval endpoint returned no "
+            "chunk_id values.\n"
+            "Nothing can be scored, and a table of zeros here would be misleading.\n"
+            "This is an endpoint problem: raise it rather than working around it."
+        )
+
     grouped: dict[str, list[dict]] = defaultdict(list)
     for record in records:
         key = record["config_id"]
@@ -129,16 +140,6 @@ def main() -> None:
         f"{len({r['config_id'] for r in records})} configs."
     )
     print(f"Gold chunk not in top-10 for {missing} records ({missing / len(records):.1%}).")
-
-    # If every retrieved identifier looks like a URL, the endpoint never sent
-    # chunk_id and run_sweep.py fell back to URLs. Say so loudly: several
-    # chunks can share a page, so those scores are optimistic.
-    all_ids = [i for r in records for i in (r.get("retrieved") or []) if i]
-    if all_ids and all(i.startswith("http") for i in all_ids):
-        print(
-            "\nNOTE: no chunk_id in the results — matching fell back to URL, so "
-            "these scores are optimistic. See reference/notebook-patch.md."
-        )
 
     if args.csv:
         out = Path(args.csv)

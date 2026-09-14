@@ -138,10 +138,8 @@ there, so the `cat` commands are the route.*
 In your **RAG lab notebook**, look at the launch cell output and copy the public app URL —
 the `https://….gradio.live` one, **not** the one ending in `/gradio_api/mcp/`.
 
-If that cell is still spinning and never returned, that is normal Colab behaviour, and it
-means the `print` statements after `demo.launch()` never ran. The URL is in the output
-Gradio itself printed. The proper fix is `prevent_thread_lock=True` — see
-`.agents/skills/corpus-eval/reference/notebook-patch.md`.
+If that cell is still spinning and never returned, that is normal Colab behaviour — the
+server runs until you stop it. The URL is in the output Gradio printed when it started.
 
 ## 2.2 Point the lab at it
 
@@ -162,11 +160,10 @@ python tools/corpus_search.py "dagasztógép kapacitás" --top-k 3
 
 You should get three passages back.
 
-**Look for `chunk_id` in the output.** If those lines are missing or empty, your notebook
-has not been patched, and the evaluation will fall back to matching on URL. That is
-weaker, because several chunks share one source page, so every score comes out optimistic.
-The one-line fix is in `.agents/skills/corpus-eval/reference/notebook-patch.md` — apply
-it and relaunch now if you can.
+**Check that each result carries a `chunk_id`.** The whole evaluation matches retrieved
+passages against gold chunks by that id, so if the lines are missing or empty nothing
+downstream can be scored. Say so now rather than discovering it at Part 7 — it is an
+endpoint problem, not something to work around.
 
 Nothing back at all?
 
@@ -232,8 +229,18 @@ Now start a session:
 pi
 ```
 
-Paste in `prompts/00-orientation.md` (everything below the `---`) and read the reply. You
-are checking that it found the skills and reached the endpoint, nothing more.
+Paste in `prompts/00-orientation.md` and read the reply. You are checking that it found
+the skills and reached the endpoint, nothing more.
+
+### Watch the footer
+
+The bottom line of the TUI shows the working directory, session name, token and cache
+usage (↑ input, ↓ output, R cache read, W cache write, CH cache hit rate), cost, context
+usage, and the current model.
+
+Keep half an eye on **context usage** all session. It is the resource that actually runs
+out, and in Part 6 you will see it climb. `/session` gives the same numbers plus the path
+to the session file.
 
 ---
 
@@ -589,18 +596,46 @@ copy-paste error when you write it out.
 the cache populates. The script takes the last run of each mode for exactly this reason,
 and tells you if the difference is suspiciously close to zero.
 
-### By hand, if you prefer
+### Why the script, and not a one-line grep
 
-```bash
-python tools/write_mcp_config.py --proxy
-pi --mode json -p "What is 2+2? Do not use any tools." | grep -o '"input_tokens":[0-9]*' | head -1
+An obvious shortcut is to grep the JSON stream for `input_tokens`. It does not work, and
+the way it fails is instructive.
 
-python tools/write_mcp_config.py --direct
-pi --mode json -p "What is 2+2? Do not use any tools." | grep -o '"input_tokens":[0-9]*' | head -1
-pi --mode json -p "What is 2+2? Do not use any tools." | grep -o '"input_tokens":[0-9]*' | head -1
+**`input` counts only non-cached tokens.** Context size is
+`input + cache_read + cache_write`. Once prompt caching is warm, the tool schema you are
+paying for every request arrives as `cache_read`, and an input-only measurement collapses
+to roughly zero difference — looking exactly like the empty-metadata-cache failure above,
+for an unrelated reason.
+
+The script sums all three and prints the split, so you can see how much of your context
+is cached rather than guessing:
+
+```
+proxy only                   4,180             4,140
+direct tool                  4,440             4,400
 ```
 
-The two `pi` invocations are byte-identical by design. The third one is the cache warm-up.
+Cached is cheaper. It is not free, and it is not smaller.
+
+### Inspecting the context directly
+
+Four ways, roughly in order of depth:
+
+| | |
+|---|---|
+| The footer | Context usage as a running percentage, always on screen |
+| `/session` | Session file path, ID, message count, tokens, cost |
+| The session JSONL | The verbatim record. Open it in the file explorer |
+| `pi install npm:pi-context` | A visual dashboard of context usage and token distribution |
+
+The session file is a tree: every entry has an `id` and a `parentId`, and your current
+position is the active leaf — which is what `/tree` and `/fork` navigate. Worth opening
+once, because seeing your conversation as a list of JSON objects makes "the context
+window" concrete in a way no diagram does.
+
+One caveat: the JSONL holds the *full* history, while the context sent to the model is a
+subset once compaction has run. Compaction is lossy; the file is not. That is precisely
+why `/tree` can revisit material the model has already forgotten.
 
 ### What that command actually is
 
@@ -842,7 +877,7 @@ why you now know how each one works rather than which button turns it on.
 | `/login` does nothing | Use an API key instead, or check port forwarding is enabled |
 | 504 from the corpus URL | Tunnel, not your app. Test `localhost:7860` inside the RAG notebook |
 | Endpoint unreachable | RAG runtime died. Relaunch and re-`export CORPUS_URL` — the URL changes |
-| `chunk_id` empty everywhere | Notebook not patched. Scores will be optimistic; note it in the report |
+| `chunk_id` empty everywhere | Endpoint problem, not yours. Nothing can be scored — raise it |
 | `Sampled 0 chunks` | `data/chunks.jsonl` missing or empty. Part 2.4 |
 | Sweep total is half what you expected | Chunks were skipped, only one language was generated, or subagents clobbered each other. `merge_questions.py` distinguishes all three |
 | A slot produced no records at all | That subagent died or was rate limited. Re-run just that one — it is cheap |
@@ -953,6 +988,9 @@ Verify these against your installed version; Pi moves quickly.
 | `/mcp setup` | Guided config: detect existing MCP files, scaffold `.mcp.json`, preview diffs |
 | `directTools` in `.mcp.json` | Promote a tool from the proxy into Pi's tool list. ~150–300 tokens each |
 | `/skill:mcp-scripting` | The adapter's scripting workflow, for multi-call MCP work |
+| `/session` | Session file, ID, message count, tokens, cost |
+| `/autocompact` | Toggle automatic compaction; shows the reserve and keep-recent settings |
+| `pi install npm:pi-context` | Visual dashboard of context-window usage and token distribution |
 
 Worth trying afterwards: run the whole Part 5 phase again under `--mode json`, pipe it to
 a file, and count the tool calls and tokens each subagent used. That is how you turn "the

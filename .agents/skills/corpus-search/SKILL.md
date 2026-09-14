@@ -77,7 +77,7 @@ quote the passage, and continue with the original task.
 | Connection refused / timeout | Colab runtime stopped, or the URL rotated |
 | 504 from the URL | Gradio share tunnel is down; the app may be fine |
 | Empty results for everything | Weaviate collection was dropped or never filled |
-| `chunk_id` empty in all results | Notebook patch not applied — see corpus-eval/reference/notebook-patch.md |
+| `chunk_id` empty in all results | The endpoint is misconfigured. Nothing can be scored — raise it rather than working around it |
 
 If calls start failing mid-task, do not silently retry forever. Record where
 you stopped in `TODO.md`, tell the user the endpoint is down, and stop.

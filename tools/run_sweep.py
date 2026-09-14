@@ -51,11 +51,8 @@ def load_jsonl(path: Path) -> list[dict]:
 
 
 def retrieved_ids(results: list[dict]) -> list[str]:
-    """Prefer chunk_id; fall back to url when the notebook patch is absent."""
-    ids = []
-    for item in results:
-        ids.append(item.get("chunk_id") or item.get("url") or "")
-    return ids
+    """Chunk ids of the retrieved passages, in rank order."""
+    return [item.get("chunk_id") or "" for item in results]
 
 
 def main() -> None:

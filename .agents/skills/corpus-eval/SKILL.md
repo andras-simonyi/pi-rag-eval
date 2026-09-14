@@ -47,11 +47,28 @@ measures nothing. Do not batch them.
 
 Run at most 4 subagents concurrently.
 
-Each subagent appends one line to `eval/questions.jsonl`:
+**Each subagent writes only its own file**, `eval/questions/chunk_<slot>.jsonl`:
 
 ```json
-{"question_id":"q07_hu","gold_chunk_id":"...","gold_url":"...","lang":"hu","question":"..."}
+{"question_id":"q07_hu","slot":"07","gold_chunk_id":"...","gold_url":"...","lang":"hu","question":"..."}
 ```
+
+Never point concurrent subagents at one shared output file. They run with
+`--tools read,write` and therefore have no shell, so "append" means rewriting
+the whole file — read, modify, write. Two overlapping subagents each read the
+same state and the second write erases the first. The records vanish with no
+error. Separate files make the race impossible rather than unlikely.
+
+When they have all finished, reduce:
+
+```bash
+python tools/merge_questions.py
+```
+
+That validates every record, reports any sampled chunk that produced neither a
+question nor a skip, flags chunks that got only one language, and refuses to
+merge if anything is malformed. Read its output — a silent slot means a
+subagent died, and re-running just that one is cheap.
 
 Rules for a valid question are in `reference/protocol.md`. Read that file
 before generating anything.
@@ -63,7 +80,8 @@ eval set. A bad eval set produces confident numbers about nothing.
 
 ## Phase 2 — run the sweep
 
-This is 200 mechanical calls. Do not make them one at a time from your own
+This is a few hundred mechanical calls — the exact count is
+`2 x surviving chunks x 10 configs`, so it depends on how many chunks phase 1 skipped. Do not make them one at a time from your own
 context; that wastes tokens and takes an hour.
 
 ```bash
