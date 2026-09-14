@@ -10,7 +10,7 @@ configurations, two languages, real metrics — and the agent does the work.
 ## What you will produce
 
 - `eval/questions.jsonl` — an evaluation set generated from the corpus itself
-- `eval/results.jsonl` — 200 retrieval calls across the configuration grid
+- `eval/results.jsonl` — a few hundred retrieval calls across the configuration grid
 - `eval/scores.csv` — recall@k, MRR@10, latency per configuration
 - `REPORT.md` — a recommendation you take back to the notebook
 
@@ -80,7 +80,9 @@ tools/
   corpus_search.py     Query the retriever
   run_sweep.py         Run the config grid, resumable
   sample_chunks.py     Deterministic chunk sampling
+  merge_questions.py   Reduce the per-subagent question files into one
   write_mcp_config.py  Point the MCP adapter at the current endpoint
+  measure_tool_cost.py Proxy vs direct tool, in tokens per request
   mcp_probe.py         Raw MCP protocol, no agent — optional, one level down
   plot_scores.py       Quality vs latency
 .agents/skills/
@@ -91,7 +93,6 @@ prompts/bootstrap/     Regenerate the scaffolding yourself, then diff
 setup.sh               One-shot install: Pi, the MCP adapter, Python deps
 .mcp.json.example      Shape of the MCP config; generate the real one with tools/
 hf-space/              Durable endpoint, if you would rather not use Colab
-instructor/            Runbook, timings, the poisoned chunk
 ```
 
 ## The four mechanisms this exercise demonstrates
@@ -110,15 +111,15 @@ parallelism.
 
 **MCP** — `search_corpus` is reachable three ways: a CLI in a skill, the MCP
 adapter's shared proxy tool, and the same MCP tool registered directly. The
-adapter's `/mcp` panel toggles between the last two, so the token argument is
-something you measure rather than something you are told. Prompt 05 makes you
+`directTools` in `.mcp.json` switches between the last two, so the token argument
+is something you measure rather than something you are told. Prompt 05 makes you
 pick a side.
 
-## Nothing here was handed down
+## None of this is sacred
 
-`AGENTS.md`, the skills, `TODO.template.md` and the scripts in `tools/` were all generated
-by Pi and then reviewed. They ship with the repo so the lab is reproducible, not because
-they are the kind of thing you write by hand.
+`AGENTS.md`, the skills, `TODO.template.md` and the scripts in `tools/` are ordinary
+files, and each is the kind of artifact an agent can write for itself. They ship with
+the repo so the lab is reproducible, not because they must be authored by hand.
 
 Part 12 has you generate one yourself — a `retrieval-regression` skill, written from the
 transcript of the work you just finished, using the `skill-writer` skill. That ordering is

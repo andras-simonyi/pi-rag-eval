@@ -1,15 +1,9 @@
-# Prompt 05 — three roads to one function (20 min, optional)
-
-Purpose: the MCP argument, settled with measurements rather than opinion. Run after
-students have done the proxy/direct token comparison in Part 9.3, so they have numbers.
-
----
-
 We can reach search_corpus three ways now:
 
 1. tools/corpus_search.py, documented in the corpus-search skill
 2. the MCP server, through the adapter's shared proxy tool
-3. the same MCP tool registered directly, with its full schema in every request
+3. the same MCP tool registered directly via directTools in .mcp.json, with its
+   full schema in every request
 
 I have measured what 2 and 3 cost per session. Read .mcp.json and the corpus-search
 skill, then argue for one of them for this specific job.

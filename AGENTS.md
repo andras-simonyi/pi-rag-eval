@@ -33,7 +33,6 @@ tools/          Scripts you run. Read the source before assuming behaviour.
 prompts/        Prompt templates, including the subagent brief.
 eval/           All generated artifacts. Safe to inspect, append-only in spirit.
 data/           Local corpus copy (chunks.jsonl), user-supplied.
-instructor/     Course material. Not part of the exercise.
 ```
 
 ## How to work here
@@ -62,5 +61,8 @@ note are worth more than complete results that are fiction.
 
 - Generated files go in `eval/`. Do not write outside the repo.
 - JSONL files are append-only; do not rewrite them to "clean up".
+- Concurrent writers get one file each, never a shared one. Subagents have no
+  shell, so their "append" rewrites the whole file and concurrent writes lose
+  records silently. Fan out to separate files, then reduce with a script.
 - Reports are Markdown, written for a reader who was not watching you work.
 - Hungarian text in the corpus stays in Hungarian when quoted.

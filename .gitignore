@@ -2,6 +2,7 @@
 data/*.jsonl
 data/*.zip
 eval/chunks/
+eval/questions/
 eval/*.jsonl
 eval/*.csv
 eval/*.md

@@ -9,7 +9,7 @@ Status markers: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked.
 - [ ] CORPUS_URL set and endpoint responding
 - [ ] data/chunks.jsonl present locally
 - [ ] Notebook patch applied — chunk_id appears in search results
-- [ ] Estimated total endpoint calls: ___
+- [ ] Estimated total endpoint calls: ___  (= 2 x surviving chunks x 10)
 
 ## Phase 1 — evaluation set
 - [ ] Sample 20 chunks, seed 42

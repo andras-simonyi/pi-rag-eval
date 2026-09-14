@@ -18,6 +18,7 @@ import json
 import os
 import sys
 import threading
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -70,11 +71,25 @@ def main() -> None:
     if not args.url:
         sys.exit('No corpus URL. export CORPUS_URL="https://xxxx.gradio.live"')
 
-    questions = load_jsonl(Path(args.questions))
+    all_records = load_jsonl(Path(args.questions))
+
+    # Phase 1 writes a skip record for any chunk that could not support a valid
+    # question (navigation boilerplate, contact blocks, bare tables of
+    # contents). Those are not questions and have no question_id.
+    skipped = [r for r in all_records if r.get("status") == "skip"]
+    questions = [
+        r for r in all_records
+        if r.get("status") != "skip" and r.get("question_id") and r.get("question")
+    ]
+    malformed = len(all_records) - len(skipped) - len(questions)
+
     if args.limit:
         questions = questions[: args.limit]
     if not questions:
-        sys.exit(f"No questions found in {args.questions}. Run phase 1 first.")
+        sys.exit(
+            f"No usable questions in {args.questions} "
+            f"({len(skipped)} skip records, {malformed} malformed). Run phase 1 first."
+        )
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -90,9 +105,31 @@ def main() -> None:
         if (question["question_id"], config["config_id"]) not in done
     ]
 
+    # Show the arithmetic. There is no single "correct" total: it depends on how
+    # many sampled chunks survived phase 1 and whether both language variants
+    # were generated for each.
+    languages = Counter(q.get("lang", "?") for q in questions)
+    slots = len({q.get("slot") for q in questions})
     total = len(questions) * len(GRID)
+
     print(
-        f"{len(questions)} questions x {len(GRID)} configs = {total} calls. "
+        f"{len(questions)} questions from {slots} chunks "
+        f"({', '.join(f'{n} {lang}' for lang, n in sorted(languages.items()))})"
+    )
+    if skipped:
+        print(f"{len(skipped)} chunks skipped in phase 1:")
+        for record in skipped:
+            print(f"    {record.get('slot', '??')}: {record.get('reason', 'no reason given')}")
+    if malformed:
+        print(f"WARNING: {malformed} records were neither a question nor a skip.")
+    if len(languages) == 1:
+        print(
+            "NOTE: only one language present. The protocol asks for a Hungarian and an\n"
+            "      English question per chunk — the cross-lingual comparison is the\n"
+            "      sharpest result in this evaluation and you will not get it this way."
+        )
+    print(
+        f"\n{len(questions)} questions x {len(GRID)} configs = {total} calls. "
         f"{len(done)} already done, {len(jobs)} to run."
     )
     if not jobs:

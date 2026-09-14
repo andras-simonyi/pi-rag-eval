@@ -1,10 +1,3 @@
-# Prompt 04 — report and recommend (20 min)
-
-Purpose: the payoff. Students take the recommendation back to their notebook
-and change the Gradio defaults.
-
----
-
 Write REPORT.md following the structure in the corpus-eval skill.
 
 Two things I care about most:

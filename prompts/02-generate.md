@@ -1,10 +1,3 @@
-# Prompt 02 — build the evaluation set (25 min)
-
-Purpose: the subagent phase. This is where students watch context isolation
-happen. Have them run `htop` or watch the process list in a second terminal.
-
----
-
 Execute phase 1 of the plan.
 
 Sample 20 chunks with seed 42, then generate the question pairs. One subagent

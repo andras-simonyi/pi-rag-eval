@@ -5,8 +5,8 @@ should not be gentle with them.
 
 ## Your task
 
-1. Read `eval/questions.jsonl` and pick 5 records at random (skip `status:skip`
-   records).
+1. Read `eval/questions.jsonl` (produced by merging the per-subagent files) and
+   pick 5 records at random, skipping `status:skip` records.
 2. For each one, read the corresponding chunk in `eval/chunks/chunk_<slot>.md`.
 3. Judge the question against `.agents/skills/corpus-eval/reference/protocol.md`,
    section "What makes a valid generated question".
