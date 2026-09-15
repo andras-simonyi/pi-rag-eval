@@ -1,74 +1,15 @@
 # pi-rag-eval
 
-Lab exercise: use an agentic CLI assistant to evaluate the RAG retriever you
-built in the previous lab, and decide what settings it should ship with.
+Lab exercise: use the Pi agentic CLI assistant to evaluate a RAG retriever. See
+LAB_GUIDE.md for a detailed, step-by-step guide, this READNE is just an
+introductory overview.
 
-In the RAG lab, section 19 compared four retrieval pipelines on one question
-you picked by hand. Here you do it properly — twenty questions, ten
-configurations, two languages, real metrics — and the agent does the work.
-
-## What you will produce
+## What will be produced
 
 - `eval/questions.jsonl` — an evaluation set generated from the corpus itself
 - `eval/results.jsonl` — a few hundred retrieval calls across the configuration grid
 - `eval/scores.csv` — recall@k, MRR@10, latency per configuration
 - `REPORT.md` — a recommendation you take back to the notebook
-
-## Setup
-
-**1. Start the environment.** Create a **Blank** Codespace at github.com/codespaces,
-then:
-
-```bash
-git clone https://github.com/YOUR-INSTRUCTOR/pi-rag-eval.git
-cd pi-rag-eval
-./setup.sh
-```
-
-`setup.sh` checks Node, installs Pi from `@earendil-works/pi-coding-agent`,
-installs `pi-mcp-adapter`, and installs the Python dependencies. A blank Codespace
-has no repository behind it, so nothing is backed up — push your work before you
-finish.
-
-Pi's official npm package is `@earendil-works/pi-coding-agent`. The older
-`@mariozechner/pi-coding-agent` is deprecated and frozen below the version the MCP
-adapter requires; the adapter names the official package as a peer dependency, so
-installing the wrong one fails at startup with `Cannot find module
-'@earendil-works/pi-coding-agent'`. `setup.sh` removes the deprecated packages first.
-
-**2. Start the corpus endpoint.** Run the RAG lab notebook in Colab through the
-launch cell. Copy the public URL it prints — the app URL, not the MCP one:
-
-```bash
-export CORPUS_URL="https://xxxxxxxxxxxx.gradio.live"
-```
-
-Leave the Colab runtime running for the whole session. If it dies, relaunch and
-re-export — the URL will be different.
-
-Check it works:
-
-```bash
-python tools/corpus_search.py "dagasztógép"
-```
-
-**3. Get a local copy of the corpus.** Question generation needs the chunk text
-locally. In Colab:
-
-```python
-from google.colab import files
-files.download(str(CHUNKS_PATH))
-```
-
-Drag the downloaded `chunks.jsonl` into `data/` in your Codespace.
-
-**4. Start Pi.**
-
-```bash
-pi
-```
-
-Then work through `prompts/00-orientation.md` onward, pasting one at a time.
 
 ## Layout
 
