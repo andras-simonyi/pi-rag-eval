@@ -52,7 +52,7 @@ No repository, no configuration. You get a plain Ubuntu container with Node, Pyt
 ## 1.2 Get the lab repo
 
 ```bash
-git clone https://github.com/YOUR-INSTRUCTOR/pi-rag-eval.git
+git clone https://github.com/andras-simonyi/pi-rag-eval.git
 cd pi-rag-eval
 ```
 
