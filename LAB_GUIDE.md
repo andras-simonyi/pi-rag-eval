@@ -66,25 +66,6 @@ It checks Node (the MCP adapter needs 22.19 or later and will pull a newer Node 
 nvm if yours is older), installs Pi from `@earendil-works/pi-coding-agent`, installs the
 MCP adapter, and installs the Python dependencies. Re-runnable if a step fails.
 
-> **One package name matters here.** Pi is published as
-> `@earendil-works/pi-coding-agent`. An older `@mariozechner/pi-coding-agent` exists,
-> is deprecated, and is frozen below the version the MCP adapter needs. The adapter
-> declares the official package as a peer dependency, so installing the wrong one
-> produces this at startup:
->
-> ```
-> Failed to load extension: Cannot find module '@earendil-works/pi-coding-agent'
-> ```
->
-> `setup.sh` removes the deprecated packages before installing, so a clean run avoids
-> this. If you hit it anyway, see Troubleshooting.
-
-Open it first if you want to see what it does — it is forty lines and no magic:
-
-```bash
-cat setup.sh
-```
-
 Then confirm all three things:
 
 ```bash
