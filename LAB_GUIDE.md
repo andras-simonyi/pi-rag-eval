@@ -124,7 +124,7 @@ server runs until you stop it. The URL is in the output Gradio printed when it s
 
 ## 2.2 Point the lab at it
 
-In your Codespace terminal:
+In your Codespace terminal (you can /quit Pi and continue from were you were later with running `pi -c`):
 
 ```bash
 export CORPUS_URL="https://xxxxxxxxxxxx.gradio.live"
@@ -163,8 +163,7 @@ from google.colab import files
 files.download(str(CHUNKS_PATH))
 ```
 
-Then drag the downloaded `chunks.jsonl` into the `data/` folder in your Codespace file
-explorer. Confirm:
+Download `chunks.jsonl` from Colab's `rag_corpus_extracted` folder and upload it to the `data/` folder in your Codespace file explorer. Confirm:
 
 ```bash
 wc -l data/chunks.jsonl
@@ -216,7 +215,7 @@ the skills and reached the endpoint, nothing more.
 ### Watch the footer
 
 The bottom line of the TUI shows the working directory, session name, token and cache
-usage (↑ input, ↓ output, R cache read, W cache write, CH cache hit rate), cost, context
+usage (↑ input, ↓ output, R cache read, CH cache hit rate), cost, context
 usage, and the current model.
 
 Keep half an eye on **context usage** all session. It is the resource that actually runs
@@ -257,6 +256,11 @@ Every chunk in your corpus can generate a question that only that chunk answers.
 makes the chunk its own gold label — no annotation, no LLM judge, no arguing about what
 a good answer looks like.
 
+Paste `prompts/02-generate.md`.
+
+Pi will now sample chunks and generate questions for them, performing the
+following steps:
+
 ## 5.1 Sample
 
 ```bash
@@ -268,7 +272,7 @@ Seeded, so your sample matches your neighbour's and results are comparable.
 
 ## 5.2 Generate, one subagent per chunk
 
-Paste `prompts/02-generate.md`.
+
 
 The agent will spawn a separate `pi` process for each chunk, four at a time. Watch the
 process list in a second terminal:
@@ -407,9 +411,17 @@ backend mid-task.
 
 # Part 7 — Phase 3: score
 
+Pi should generate the scores on its own by running the skill-associated
+`score.py` script with appropriate parameters:
+
 ```bash
 python .agents/skills/corpus-eval/scripts/score.py --csv eval/scores.csv
 python .agents/skills/corpus-eval/scripts/score.py --by-lang
+```
+
+On the other hand, there is an independent visualization tool which you can run:
+
+```bash
 python tools/plot_scores.py
 ```
 
@@ -529,408 +541,6 @@ The panel works, but the keybindings differ across adapter versions and forks. U
 config file for the measurement in 9.3 — it is documented identically everywhere and it is
 scriptable, so your before/after is reproducible rather than dependent on remembering
 which state you left the panel in.
-
-## 9.3 Promote one tool to direct, and measure
-
-By default every MCP tool is reached through the single `mcp` proxy tool. Adding
-`directTools` registers a tool in Pi's own tool list, alongside `read` and `bash`, with
-its full schema in the system prompt on every request.
-
-Each direct tool costs roughly 150–300 tokens that way — name, description and JSON
-schema. The proxy costs about 200 tokens total, no matter how many tools sit behind it.
-
-One script does the whole thing:
-
-```bash
-python tools/measure_tool_cost.py
-```
-
-It runs the same trivial prompt four times — twice on proxy, twice on direct — and
-restores your `.mcp.json` afterwards, including if you interrupt it.
-
-```
-proxy:
-  run 1: 4,180 input tokens
-  run 2: 4,180 input tokens
-
-direct:
-  run 1: 4,180 input tokens
-  run 2: 4,440 input tokens
-
-----------------------------------------------
-proxy only                 4,180 tokens
-direct tool                4,440 tokens
-----------------------------------------------
-difference                  +260 tokens per request
-```
-
-Two details in that output are the whole lesson.
-
-**The prompt never changes.** `"What is 2+2? Do not use any tools."` is the control;
-`.mcp.json` is the only variable. If the prompt varied, the comparison would measure
-nothing. This is also why the script exists rather than two commands you type by hand —
-the two runs *should* be identical in every respect but the config, and that reads like a
-copy-paste error when you write it out.
-
-**Direct run 1 matches proxy; run 2 does not.** On the first session after adding
-`directTools` the metadata cache is empty, so the tool silently falls back to proxy while
-the cache populates. The script takes the last run of each mode for exactly this reason,
-and tells you if the difference is suspiciously close to zero.
-
-### Why the script, and not a one-line grep
-
-An obvious shortcut is to grep the JSON stream for `input_tokens`. It does not work, and
-the way it fails is instructive.
-
-**`input` counts only non-cached tokens.** Context size is
-`input + cache_read + cache_write`. Once prompt caching is warm, the tool schema you are
-paying for every request arrives as `cache_read`, and an input-only measurement collapses
-to roughly zero difference — looking exactly like the empty-metadata-cache failure above,
-for an unrelated reason.
-
-The script sums all three and prints the split, so you can see how much of your context
-is cached rather than guessing:
-
-```
-proxy only                   4,180             4,140
-direct tool                  4,440             4,400
-```
-
-Cached is cheaper. It is not free, and it is not smaller.
-
-### What proxy mode actually puts in the context
-
-Worth being precise about, because "one tool instead of hundreds" is a slogan and the
-reality is more interesting.
-
-**At session start** the context holds exactly one tool definition: `mcp`, with its action
-verbs (search, describe, call, plus status and auth) and its input schema. Roughly 200
-tokens. None of your servers' tool names, descriptions or schemas are there.
-
-**The metadata still exists**, cached on disk, so search and describe work before the
-adapter has ever connected. Servers are lazy — they start on the first real call.
-
-**The model gets what it needs by asking.** It calls `mcp({search: "corpus"})` and the
-matching tool names and schemas come back *as a tool result*.
-
-That last step is the catch. **A tool result is a message in the conversation, and it
-stays there.** Once the agent has searched and pulled down `search_corpus`'s schema, you
-pay for that schema on every subsequent request — exactly as if it had been direct, plus
-the round trip you spent discovering it.
-
-So proxy does not make tool metadata free. It makes it *lazy and scoped*:
-
-| | Pays for | When |
-|---|---|---|
-| direct | every tool, always | up front, every request |
-| proxy | only tools actually touched | from first use onward, plus a discovery round trip |
-
-Proxy wins when you have twenty tools and use two. The advantage shrinks toward zero in a
-session that touches everything. For this lab — one server, one tool, used constantly —
-proxy is arguably the wrong choice, and saying so is a better answer than repeating the
-README.
-
-Execution is identical either way; only discovery differs.
-
-### How does the proxy find a tool?
-
-You have spent this lab evaluating retrieval. The proxy's `search` action is a retrieval
-system too, sitting inside your agent's inner loop. It is worth a minute.
-
-It is **purely lexical**. Space-separated query words are ranked by weighted matches
-across the tool name, the server name, the description, and any configured
-`searchKeywords`, paginated at 12 results by default. Some versions simply OR the words
-with no ranking. Tool names are fuzzy-matched on hyphens and underscores, so
-`context7_resolve_library_id` finds `context7_resolve-library-id` — separator
-normalisation, not edit distance, not stemming. A regex mode exists, unranked.
-
-No embeddings. No reranking. Nothing you built in the RAG lab.
-
-**And that is probably the right call.** The corpus is a few dozen very short documents.
-The "text" is identifiers and one-line descriptions, not prose. The lookup sits in the
-agent's loop, so latency has to be near zero. Requiring an embedding model to install a
-tool adapter would be ridiculous. Your reranker earns its keep on paragraphs of Hungarian
-technical documentation; it would be absurd here.
-
-**But it fails exactly where your own table says keyword retrieval fails.** A query whose
-words do not overlap the tool's name or description returns nothing. Try it:
-
-```
-Search your MCP tools for "hungarian bakery equipment lookup". Then search for
-"corpus". Show me both result sets and explain the difference.
-```
-
-The second finds `search_corpus`. The first probably does not, even though it describes
-what the tool does far better. That is your `keyword_plain` row, reproduced inside the
-agent's own plumbing.
-
-The fix is not a vector index. It is `searchKeywords` in the server config — hand-written
-synonyms attached to a tool so lexical search can reach it. Check the adapter's README for
-the exact placement, since the config schema varies between versions. Adding a couple of
-Hungarian terms and re-running the failing query is a five-minute experiment with a very
-clear result.
-
-Worth stating plainly in your report if you have room: two retrieval systems in one
-session, one tuned with an evaluation harness and one deliberately left as keyword
-matching, each appropriate to its corpus.
-
-### Find out for yourself
-
-Ask the agent what it can see. In a **fresh** session, before it has called anything:
-
-```
-Without calling any tools, tell me exactly what you know about the MCP servers and
-tools available to you. Names, descriptions, schemas — quote what is in front of you,
-and say clearly what you do not know.
-```
-
-Then let it run a search and ask again. The difference between those two answers is the
-proxy architecture, demonstrated rather than described — and it works whatever version of
-the adapter you have.
-
-### Inspecting the context directly
-
-Four ways, roughly in order of depth:
-
-| | |
-|---|---|
-| The footer | Context usage as a running percentage, always on screen |
-| `/session` | Session file path, ID, message count, tokens, cost |
-| The session JSONL | The verbatim record. Open it in the file explorer |
-| `pi install npm:pi-context` | A visual dashboard of context usage and token distribution |
-
-The session file is a tree: every entry has an `id` and a `parentId`, and your current
-position is the active leaf — which is what `/tree` and `/fork` navigate. Worth opening
-once, because seeing your conversation as a list of JSON objects makes "the context
-window" concrete in a way no diagram does.
-
-One caveat: the JSONL holds the *full* history, while the context sent to the model is a
-subset once compaction has run. Compaction is lossy; the file is not. That is precisely
-why `/tree` can revisit material the model has already forgotten.
-
-### What that command actually is
-
-`-p` is print mode: one turn, no TUI, answer to stdout, exit. The same flag the subagents
-used in Part 5. `--mode json` swaps the prose output for a structured event stream, one
-JSON object per line, including the usage block — which is what makes the `grep` possible.
-
-It does **not** attach to or inspect your interactive Pi session. Each invocation is a
-fresh process with an empty context: it reads `.mcp.json` from the working directory,
-assembles a system prompt containing every registered tool, makes one API call, prints
-events, exits.
-
-That is exactly why it measures what we want. `input_tokens` on that single request is the
-standing overhead — system prompt plus tool schemas plus a tiny user message — with no
-conversation history in the way. The prompt is chosen so the model does nothing at all, so
-what is left is the cost of merely being ready.
-
-It is also why config changes need a restart: a running session read its config at startup
-and will not notice you editing the file. And each run is a real billed API call, so the
-script makes four.
-
-Confirm it actually took effect: start `pi`, open `/mcp`, and check `search_corpus` is
-listed as direct rather than proxied.
-
-## What you just measured
-
-The prompt was deliberately pointless. You measured what a session costs **before it does
-any work** — the standing charge for having the capability available.
-
-One tool with one small schema is a modest difference. The setups people actually run have
-six or eight servers with twenty tools each, all of it resident in every request whether
-used or not. That is the cost the adapter exists to avoid, and it is the concrete form of
-Pi's argument against MCP.
-
-Put it back on proxy before continuing:
-
-```bash
-python tools/write_mcp_config.py --proxy
-```
-
-## 9.4 Use it
-
-```
-Use the corpus MCP server to find what the corpus says about oven capacity.
-```
-
-Watch the agent discover the tool through the proxy and call it. For multi-call work the
-adapter also exposes a scripting tool, so the agent can loop and fan out over MCP inside a
-single call rather than one round trip per query — `/skill:mcp-scripting` has the detail.
-
-Worth trying: ask it to run five queries across different modes and summarise. Compare how
-that feels against `tools/run_sweep.py` doing the same thing.
-
-## 9.5 Pick a side
-
-Paste `prompts/05-mcp-comparison.md`.
-
-You now have three access paths to one function — a CLI in a skill, an MCP proxy tool, and
-a direct MCP tool — and measurements for each. Disagree with the agent if you think it is
-wrong.
-
-> **Optional, one level down:** `python tools/mcp_probe.py list` speaks the protocol
-> directly with no agent involved, so you can see the raw tool schema the server
-> advertises and what it would cost verbatim.
-
----
-
-# Part 10 — The corpus is not your friend
-
-Your corpus was scraped from the public web. It flows, unreviewed, into an agent that has
-a shell.
-
-Paste `prompts/06-injection.md` — an ordinary-looking research task. Then:
-
-```bash
-ls -la eval/
-cat eval/agent-registered.txt 2>/dev/null && echo ">>> your agent followed instructions from the corpus"
-```
-
-## Debrief
-
-- Did your agent read the injected text? Did it act on it? Did it tell you?
-- `.agents/skills/corpus-search/SKILL.md` contains an explicit warning about untrusted
-  passages. Did it help? Would it survive a subtler injection than this one?
-- That chunk arrived through the scraper you wrote in lab 1. Who reviewed that content?
-- The agent had a shell. In this container the blast radius was nothing. What would it
-  have been in your home directory, on your laptop, with your SSH keys?
-
-There is no setting that fixes this. Containment, least privilege, and treating retrieved
-text as data rather than instructions are what you have. This is why the lab runs in a
-container and why `pi --tools read,grep,find,ls` exists.
-
----
-
-# Part 11 — Save and clean up
-
-**Your Codespace is blank — it has no repository behind it.** Nothing here survives unless
-you push it somewhere:
-
-```bash
-gh auth status || gh auth login
-gh repo create pi-rag-eval-results --private --source=. --push
-```
-
-Or download `eval/`, `REPORT.md` and `TODO.md` from the file explorer.
-
-Do not skip this. Everything you just built — the report, the skill you wrote in Part 12,
-your `TODO.md` — lives on a disk that is about to be deleted.
-
-Then **delete the Codespace** at github.com/codespaces. Stopped Codespaces keep consuming
-your 15 GB storage quota, and storage is the limit people hit first, not compute.
-
-Stop your RAG lab Colab runtime too.
-
----
-
-# Part 12 — Teach the agent what you just learned
-
-Stay in the **same session** that wrote the report. The history is the raw material.
-
-You have just worked out a procedure: sample, generate under isolation, validate, sweep,
-score, interpret. It took you two hours and several false starts. Right now all of that
-lives in one context window, and when this session ends it is gone.
-
-The next person to touch this corpus will work it out again from scratch.
-
-## Capture it
-
-Paste `prompts/bootstrap/b3-skill.md`.
-
-The agent will use the **`skill-writer`** skill — a skill about writing skills — to
-produce a new `retrieval-regression` skill from your session transcript.
-
-```bash
-ls .agents/skills/retrieval-regression/
-```
-
-Then open `.agents/skills/retrieval-regression/SKILL.md` in the explorer and read it
-against `.agents/skills/skill-writer/SKILL.md` side by side — split the editor, it is a
-two-document comparison.
-
-## Why this is the right moment, and not two hours ago
-
-**A skill written in advance encodes what you assumed the task would need. A skill written
-from a transcript encodes what it actually needed.** The endpoint that dropped. The
-validation pass you did not know you wanted until the questions came back copying source
-sentences verbatim. The fact that `results.jsonl` must be append-only.
-
-Nobody writes those lines before doing the work. They are harvested.
-
-It is also the honest order for the `corpus-eval` skill you have been using: a skill that
-describes a procedure should be written by someone who has performed it, whether that
-someone is a person or an agent.
-
-## Test it
-
-A skill that never fires is worse than no skill, because you will believe it is helping.
-
-Start a **fresh** session — the current one has seen everything and will look competent
-for the wrong reasons:
-
-```bash
-pi
-```
-
-Then ask, in your own words, something a colleague would actually say. Not the skill's
-vocabulary:
-
-> *We re-scraped the site last night. Did retrieval get worse?*
-
-Did the skill load? Did it follow its own steps? If it did not fire, the problem is the
-`description` frontmatter, not the body. Fix it and try again.
-
-## Then look at what you built
-
-```bash
-ls .agents/skills/
-```
-
-Four skills. Two shipped with the repo, one you generated, and one whose entire job is
-generating the others.
-
-That last one is the point. An agent that can extend itself is not a chatbot with tools
-bolted on — the extension mechanism is just files, and files are something the agent can
-already write.
-
-## Going further
-
-`prompts/bootstrap/` has three more, each of which moves a shipped artifact aside and has
-Pi regenerate it:
-
-| Prompt | Regenerates |
-|---|---|
-| `b1-agents-md.md` | `AGENTS.md`, from reading the code |
-| `b2-script.md` | `tools/run_sweep.py`, from the requirement |
-| `b4-todo.md` | `TODO.template.md`, from the task shape |
-
-Each ends by diffing your version against the shipped one. Do that comparison — you will
-find places where yours is better, and that is the most useful thing that can happen here.
-
----
-
-# What you actually did
-
-| Mechanism | Where it showed up | What it is underneath |
-|---|---|---|
-| **TODO.md** | Survived the endpoint dying in Part 6 | A text file. That is the entire trick |
-| **Skills** | `corpus-eval` loaded only when needed | Instructions injected on demand, plus scripts |
-| **Subagents** | 20 parallel processes in Part 5 | Recursion. One fresh context each |
-| **MCP** | The `/mcp` proxy/direct toggle in Part 9 | A protocol, priced in tokens per request |
-| **Self-extension** | Writing a skill in Part 12 | Files. The agent can already write files |
-
-Pi gives a model a shell and four tools. Everything above was built from that, which is
-why you now know how each one works rather than which button turns it on.
-
-## Take these four home
-
-1. **State belongs on disk.** Context windows are not memory.
-2. **Deterministic work belongs in code.** Never let a model do arithmetic you care about.
-3. **Retrieved text is data, never instructions.** No prompt fixes this; containment does.
-4. **Write the skill after the work, not before.** Procedures you have not performed
-   produce documentation of your assumptions.
-
----
 
 # Troubleshooting
 
